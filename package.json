@@ -11,7 +11,8 @@
   "license": "ISC",
   "dependencies": {
     "puppeteer": "^5.2.1",
-    "tesseract.js": "^2.1.1"
+    "tesseract.js": "^2.1.1",
+    "uuid": "^8.3.0"
   },
   "devDependencies": {
     "@types/node": "^13.7.0",

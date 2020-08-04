@@ -1,10 +1,18 @@
 const puppeteer = require("puppeteer");
-const Tesseract = require("tesseract.js");
+const { v4: uuidv4 } = require("uuid");
+const { createWorker, createScheduler } = require("tesseract.js");
 const fs = require("fs");
+const cpusNum = require("os").cpus().length;
+const cluster = require("cluster");
+
 const extractNumber = require("./extractNumber");
 const asyncForEach = require("./asyncForEach");
 
 class Scraper {
+  public scheduler: any;
+  constructor() {
+    this.scheduler = createScheduler();
+  }
   extractLikes(text: string) {
     const likesBigNumReg = new RegExp(/(\d+),(\d+) people like/);
     const likesSmallNumReg = new RegExp(/(\d+) people like/);
@@ -30,18 +38,26 @@ class Scraper {
   }
 
   async extractTxtFromImg(id: number) {
-    const worker = Tesseract.createWorker();
+    const worker = createWorker();
     await worker.load();
     await worker.loadLanguage("eng");
     await worker.initialize("eng");
-    const {
-      data: { text },
-    } = await worker.recognize(`./screenshots/screenshot${id}.png`);
-    await worker.terminate();
-    return text;
+    this.scheduler.addWorker(worker);
+    try {
+      const {
+        data: { text },
+      } = await this.scheduler.addJob(
+        "recognize",
+        `./screenshots/screenshot${id}.png`
+      );
+      return text;
+    } catch (err) {
+      console.error(err);
+      return;
+    }
   }
 
-  async scrape(id: number, url: string) {
+  async scrape(url: string, id?: number) {
     const browser = await puppeteer.launch({ args: ["--no-sandbox"] });
     const page = await browser.newPage();
     await page.setRequestInterception(true);
@@ -57,18 +73,64 @@ class Scraper {
     fs.mkdir("./screenshots", { recursive: true }, (err: any) => {
       if (err) throw err;
     });
-    await page.screenshot({ path: `./screenshots/screenshot${id}.png` });
-
-    const text = await this.extractTxtFromImg(id);
+    let currentId = id || uuidv4();
+    await page.screenshot({ path: `./screenshots/screenshot${currentId}.png` });
+    const text = await this.extractTxtFromImg(currentId);
     const followers = await this.extractFollowers(text);
     const likes = await this.extractLikes(text);
     await browser.close();
-    console.log(`followers: ${followers}, likes: ${likes}`);
-    return followers;
+    console.log(`url: ${url}, followers: ${followers}, likes: ${likes}`);
+    return [followers, likes];
   }
 
   async scrapeList(list: string[]) {
-    await asyncForEach(list, (id: number, url: string) => this.scrape(id, url));
+    if (list.length < cpusNum) {
+      if (cluster.isMaster) {
+        for (let k = 0; k < list.length; k++) {
+          const WORKER_LIST_ID = { scrapeId: k, scrapeUrl: list[k] };
+          cluster.fork(WORKER_LIST_ID);
+        }
+        console.log("master here");
+      } else {
+        await this.scrape(
+          process.env.scrapeUrl,
+          parseInt(process.env.scrapeId, 0)
+        );
+        process.exit();
+      }
+    } else {
+      const chunksLength = Math.ceil(list.length / (cpusNum / 2));
+      const arrWorkerChunks = list.reduce((outputArr, item, indx) => {
+        const chunkIndx = Math.floor(indx / chunksLength);
+        if (!outputArr[chunkIndx]) {
+          outputArr[chunkIndx] = [];
+        }
+        outputArr[chunkIndx].push(item);
+        return outputArr;
+      }, []);
+
+      console.log("chunk length is ", chunksLength);
+      console.log("cpunums is ", cpusNum);
+      console.log("arrworkerchunks length is", arrWorkerChunks.length);
+      console.log(
+        "length of a single arrworkerchunk is",
+        arrWorkerChunks[0].length
+      );
+
+      if (cluster.isMaster) {
+        for (let k = 0; k < arrWorkerChunks.length; k++) {
+          const WORKER_CHUNK_ID = { scrapeChunkId: k };
+          cluster.fork(WORKER_CHUNK_ID);
+        }
+      } else {
+        await asyncForEach(
+          arrWorkerChunks[parseInt(process.env.scrapeChunkId, 10)],
+          (id: number, url: string) => this.scrape(url, null)
+        );
+        process.exit();
+      }
+    }
+    await this.scheduler.terminate();
   }
 }
 
