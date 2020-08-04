@@ -58,6 +58,14 @@ class Scraper {
   }
 
   async scrape(url: string, id?: number) {
+    const trainedDataPath = "./eng.traineddata";
+    try {
+      if (fs.existsSync(trainedDataPath)) {
+        fs.unlinkSync(trainedDataPath);
+      }
+    } catch (err) {
+      console.error(err);
+    }
     const browser = await puppeteer.launch({ args: ["--no-sandbox"] });
     const page = await browser.newPage();
     await page.setRequestInterception(true);
@@ -108,14 +116,6 @@ class Scraper {
         outputArr[chunkIndx].push(item);
         return outputArr;
       }, []);
-
-      console.log("chunk length is ", chunksLength);
-      console.log("cpunums is ", cpusNum);
-      console.log("arrworkerchunks length is", arrWorkerChunks.length);
-      console.log(
-        "length of a single arrworkerchunk is",
-        arrWorkerChunks[0].length
-      );
 
       if (cluster.isMaster) {
         for (let k = 0; k < arrWorkerChunks.length; k++) {
