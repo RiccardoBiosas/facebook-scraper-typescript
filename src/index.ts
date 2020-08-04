@@ -3,6 +3,7 @@ const Tesseract = require("tesseract.js");
 const fs = require("fs");
 
 const extractNumber = require("./extractNumber");
+const asyncForEach = require("./asyncForEach");
 
 class Scraper {
   extractLikes(text: string) {
@@ -19,7 +20,6 @@ class Scraper {
     const followersSmallNumReg = new RegExp(/(\d+) people follow/);
     const followersMatchedExpr =
       text.match(followersBigNumReg) || text.match(followersSmallNumReg);
-    console.log("followers match ", followersMatchedExpr);
     const followers = extractNumber(followersMatchedExpr[0]);
     return followers;
   }
@@ -50,7 +50,6 @@ class Scraper {
     await page.goto(url);
     await page.evaluate(() => window.scrollTo(1000, 1000));
     fs.mkdir("./screenshots", { recursive: true }, (err: any) => {
-      console.log(typeof err);
       if (err) throw err;
     });
     await page.screenshot({ path: `./screenshots/screenshot${id}.png` });
@@ -61,6 +60,10 @@ class Scraper {
     await browser.close();
     console.log(`followers: ${followers}, likes: ${likes}`);
     return followers;
+  }
+
+  async scrapeList(list: string[]) {
+    await asyncForEach(list, (id: number, url: string) => this.scrape(id, url));
   }
 }
 

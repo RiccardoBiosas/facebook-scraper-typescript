@@ -1,9 +1,10 @@
+export {};
 const asyncForEach = async (
-  array: [any],
-  cb: (arg0: any, arg1: number, arg2: [any]) => void
+  array: string[],
+  cb: (arg0: number, arg1: string) => void
 ) => {
   for (let i = 0; i < array.length; i++) {
-    await cb(array[i], i, array);
+    await cb(i, array[i]);
   }
 };
 
