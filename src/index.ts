@@ -1,7 +1,6 @@
 const puppeteer = require("puppeteer");
 const Tesseract = require("tesseract.js");
 const fs = require("fs");
-
 const extractNumber = require("./extractNumber");
 const asyncForEach = require("./asyncForEach");
 
@@ -11,8 +10,11 @@ class Scraper {
     const likesSmallNumReg = new RegExp(/(\d+) people like/);
     const likesMatchedExpr =
       text.match(likesBigNumReg) || text.match(likesSmallNumReg);
-    const likes = extractNumber(likesMatchedExpr[0]);
-    return likes;
+    if (likesMatchedExpr) {
+      const likes = extractNumber(likesMatchedExpr[0]);
+      return likes;
+    }
+    return;
   }
 
   extractFollowers(text: string) {
@@ -20,8 +22,11 @@ class Scraper {
     const followersSmallNumReg = new RegExp(/(\d+) people follow/);
     const followersMatchedExpr =
       text.match(followersBigNumReg) || text.match(followersSmallNumReg);
-    const followers = extractNumber(followersMatchedExpr[0]);
-    return followers;
+    if (followersMatchedExpr) {
+      const followers = extractNumber(followersMatchedExpr[0]);
+      return followers;
+    }
+    return;
   }
 
   async extractTxtFromImg(id: number) {
